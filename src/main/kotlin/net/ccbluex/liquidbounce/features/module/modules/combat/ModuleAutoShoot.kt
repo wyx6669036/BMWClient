@@ -28,7 +28,9 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
+import net.ccbluex.liquidbounce.features.module.modules.bmw.ModuleStuck
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
+import net.ccbluex.liquidbounce.features.module.modules.world.scaffold.ModuleScaffold
 import net.ccbluex.liquidbounce.render.renderEnvironmentForWorld
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.RotationsConfigurable
@@ -47,7 +49,6 @@ import net.ccbluex.liquidbounce.utils.inventory.InventoryManager
 import net.ccbluex.liquidbounce.utils.inventory.OffHandSlot
 import net.ccbluex.liquidbounce.utils.inventory.Slots
 import net.ccbluex.liquidbounce.utils.inventory.findClosestSlot
-import net.ccbluex.liquidbounce.utils.item.isConsumable
 import net.ccbluex.liquidbounce.utils.item.isNothing
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.ccbluex.liquidbounce.utils.render.WorldTargetRenderer
@@ -55,6 +56,7 @@ import net.ccbluex.liquidbounce.utils.render.trajectory.TrajectoryInfo
 import net.minecraft.entity.LivingEntity
 import net.minecraft.item.Item
 import net.minecraft.item.Items
+import net.minecraft.item.consume.UseAction
 
 /**
  * A module that automatically shoots at the nearest enemy.
@@ -107,6 +109,8 @@ object ModuleAutoShoot : ClientModule("AutoShoot", Category.COMBAT) {
     private val notDuringCombat by boolean("NotDuringCombat", false)
     val constantLag by boolean("ConstantLag", false)
     private val notDuringEating by boolean("NotDuringEating", true)
+    private val notDuringScaffold by boolean("NotDuringScaffold", true)
+    private val notDuringStuck by boolean("NotDuringStuck", true)
 
     private fun HotbarItemSlot.needsSelection(): Boolean =
         this !is OffHandSlot && this.hotbarSlot != SilentHotbar.serversideSlot
@@ -149,9 +153,12 @@ object ModuleAutoShoot : ClientModule("AutoShoot", Category.COMBAT) {
             return@handler
         }
 
-        if (notDuringEating && player.isUsingItem && player.activeItem.isConsumable) {
+        if (notDuringEating && player.activeItem.useAction != UseAction.EAT && player.activeItem.useAction != UseAction.DRINK) {
             return@handler
         }
+
+        if (notDuringScaffold && ModuleScaffold.enabled) return@handler
+        if (notDuringStuck && ModuleStuck.enabled) return@handler
 
         // Check if we have a throwable, if not we can't shoot.
         val slot = getThrowable() ?: return@handler
@@ -188,9 +195,12 @@ object ModuleAutoShoot : ClientModule("AutoShoot", Category.COMBAT) {
             return@tickHandler
         }
 
-        if (notDuringEating && player.isUsingItem && player.activeItem.isConsumable) {
+        if (notDuringEating && player.activeItem.useAction != UseAction.EAT && player.activeItem.useAction != UseAction.DRINK) {
             return@tickHandler
         }
+
+        if (notDuringScaffold && ModuleScaffold.enabled) return@tickHandler
+        if (notDuringStuck && ModuleStuck.enabled) return@tickHandler
 
         // Check if we have a throwable, if not we can't shoot.
         val slot = getThrowable() ?: return@tickHandler

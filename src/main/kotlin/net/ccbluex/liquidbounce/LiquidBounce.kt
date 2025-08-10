@@ -29,11 +29,10 @@ import net.ccbluex.liquidbounce.api.models.auth.ClientAccount
 import net.ccbluex.liquidbounce.api.services.client.ClientUpdate.gitInfo
 import net.ccbluex.liquidbounce.api.services.client.ClientUpdate.update
 import net.ccbluex.liquidbounce.api.thirdparty.IpInfoApi
-import net.ccbluex.liquidbounce.bmw.notifyAsMessage
-import net.ccbluex.liquidbounce.config.AutoConfig.configs
+import net.ccbluex.liquidbounce.config.AutoConfig
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.config.ConfigSystem.jsonFile
-import net.ccbluex.liquidbounce.config.types.Configurable
+import net.ccbluex.liquidbounce.config.types.nesting.Configurable
 import net.ccbluex.liquidbounce.deeplearn.DeepLearningEngine
 import net.ccbluex.liquidbounce.deeplearn.ModelHolster
 import net.ccbluex.liquidbounce.event.EventListener
@@ -42,7 +41,6 @@ import net.ccbluex.liquidbounce.event.events.ClientShutdownEvent
 import net.ccbluex.liquidbounce.event.events.ClientStartEvent
 import net.ccbluex.liquidbounce.event.events.ScreenEvent
 import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.command.CommandManager
 import net.ccbluex.liquidbounce.features.cosmetic.ClientAccountManager
 import net.ccbluex.liquidbounce.features.cosmetic.CosmeticService
@@ -52,12 +50,11 @@ import net.ccbluex.liquidbounce.features.misc.AccountManager
 import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.features.misc.proxy.ProxyManager
 import net.ccbluex.liquidbounce.features.module.ModuleManager
-import net.ccbluex.liquidbounce.features.module.modules.bmw.ModuleIRC
 import net.ccbluex.liquidbounce.features.module.modules.client.ipcConfiguration
 import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.BacktrackPacketManager
 import net.ccbluex.liquidbounce.features.spoofer.SpooferManager
 import net.ccbluex.liquidbounce.integration.IntegrationListener
-import net.ccbluex.liquidbounce.integration.browser.BrowserManager
+import net.ccbluex.liquidbounce.integration.backend.BrowserBackendManager
 import net.ccbluex.liquidbounce.integration.interop.ClientInteropServer
 import net.ccbluex.liquidbounce.integration.interop.protocol.rest.v1.game.ActiveServerList
 import net.ccbluex.liquidbounce.integration.task.TaskManager
@@ -285,7 +282,7 @@ object LiquidBounce : EventListener {
             },
             scope.async {
                 // Load configs
-                configs
+                AutoConfig.reloadConfigs()
             },
             scope.async {
                 // IPC configuration
@@ -328,12 +325,12 @@ object LiquidBounce : EventListener {
 
     /**
      * Prepares the GUI stage of the client.
-     * This will load [ThemeManager], as well as the [BrowserManager] and [ClientInteropServer].
+     * This will load [ThemeManager], as well as the [BrowserBackendManager] and [ClientInteropServer].
      */
     private fun prepareGuiStage() {
         // Load theme and component overlay
         ThemeManager
-        BrowserManager
+        BrowserBackendManager
 
         // Start Interop Server
         ClientInteropServer.start()
@@ -342,7 +339,7 @@ object LiquidBounce : EventListener {
         taskManager = TaskManager(scope).apply {
             // Either immediately starts browser or spawns a task to request browser dependencies,
             // and then starts the browser through render thread.
-            BrowserManager.makeDependenciesAvailable(this)
+            BrowserBackendManager.makeDependenciesAvailable(this)
 
             // Initialize deep learning engine as task, because we cannot know if DJL will request
             // resources from the internet.
@@ -389,7 +386,7 @@ object LiquidBounce : EventListener {
         ConfigSystem.storeAll()
 
         // Shutdown browser as last step
-        BrowserManager.stopBrowser()
+        BrowserBackendManager.stop()
     }
 
     /**
@@ -424,8 +421,6 @@ object LiquidBounce : EventListener {
         }.onFailure {
             ErrorHandler.fatal(it, additionalMessage = "Client start")
         }
-
-        ModuleIRC.enabled = false
     }
 
     @Suppress("unused")
@@ -462,26 +457,7 @@ object LiquidBounce : EventListener {
      */
     @Suppress("unused")
     private val shutdownHandler = handler<ClientShutdownEvent> {
-        ModuleIRC.enabled = false
-
         shutdownClient()
-    }
-
-    private var checkTicks = 0
-    @Suppress("unused")
-    private val tickHandler = tickHandler {
-        if (ModuleIRC.enabledCheck) {
-            if (ModuleIRC.enabled || checkTicks == -1) {
-                checkTicks = -1
-                return@tickHandler
-            }
-
-            checkTicks++
-            if (checkTicks >= 100) {
-                checkTicks = 0
-                notifyAsMessage("[IRC] 检测到IRC未开启，请手动开启（关闭IRC中的EnabledCheck选项即可关闭提醒）")
-            }
-        }
     }
 
 }
