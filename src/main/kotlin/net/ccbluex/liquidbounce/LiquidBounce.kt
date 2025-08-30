@@ -29,6 +29,7 @@ import net.ccbluex.liquidbounce.api.models.auth.ClientAccount
 import net.ccbluex.liquidbounce.api.services.client.ClientUpdate.gitInfo
 import net.ccbluex.liquidbounce.api.services.client.ClientUpdate.update
 import net.ccbluex.liquidbounce.api.thirdparty.IpInfoApi
+import net.ccbluex.liquidbounce.bmw.HeypixelSWKillEventListener
 import net.ccbluex.liquidbounce.config.AutoConfig
 import net.ccbluex.liquidbounce.config.ConfigSystem
 import net.ccbluex.liquidbounce.config.ConfigSystem.jsonFile
@@ -50,6 +51,8 @@ import net.ccbluex.liquidbounce.features.misc.AccountManager
 import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.features.misc.proxy.ProxyManager
 import net.ccbluex.liquidbounce.features.module.ModuleManager
+import net.ccbluex.liquidbounce.features.module.modules.bmw.delayblink.DelayBlinkPacketManager
+import net.ccbluex.liquidbounce.features.module.modules.bmw.fireballfly.FireballFlyPacketManager
 import net.ccbluex.liquidbounce.features.module.modules.client.ipcConfiguration
 import net.ccbluex.liquidbounce.features.module.modules.combat.backtrack.BacktrackPacketManager
 import net.ccbluex.liquidbounce.features.spoofer.SpooferManager
@@ -235,6 +238,11 @@ object LiquidBounce : EventListener {
         PostRotationExecutor
         ServerObserver
         ItemImageAtlas
+
+        // BMW
+        DelayBlinkPacketManager
+        FireballFlyPacketManager
+        HeypixelSWKillEventListener
     }
 
     /**

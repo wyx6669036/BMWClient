@@ -1,8 +1,10 @@
 package net.ccbluex.liquidbounce.features.module.modules.bmw
 
-import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.config.types.nesting.Choice
+import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
+import net.ccbluex.liquidbounce.event.events.HeypixelSWKillEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
@@ -11,36 +13,82 @@ import net.minecraft.entity.Entity
 
 object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
 
-    enum class WordPatternChoices(override val choiceName: String) : NamedChoice {
-        POEM("Poem"),
-        CUSTOM("Custom"),
+    private object Normal : Choice("Normal") {
+        override val parent: ChoiceConfigurable<*>
+            get() = modes
+
+        private val enemies = mutableListOf<Entity>()
+
+        @Suppress("unused")
+        private val worldChangeEventHandler = handler<WorldChangeEvent> {
+            enemies.clear()
+        }
+
+        @Suppress("unused")
+        private val attackEntityEventHandler = handler<AttackEntityEvent> { event ->
+            if (event.entity.isPlayer && !enemies.contains(event.entity)) {
+                enemies.add(event.entity)
+            }
+        }
+
+        @Suppress("unused")
+        private val tickHandler = tickHandler {
+            enemies.filter { !it.isAlive }.forEach {
+                sayL(it.name.string)
+                enemies.remove(it)
+            }
+        }
+
+        override fun enable() {
+            enemies.clear()
+        }
     }
-    private val wordPattern by enumChoice("WordPattern", WordPatternChoices.POEM)
-    private val customMessages by textList("CustomMessages", mutableListOf())
+
+    private object HeypixelSW : Choice("HeypixelSW") {
+        override val parent: ChoiceConfigurable<*>
+            get() = modes
+
+        @Suppress("unused")
+        private val heypixelSWKillEventHandler =
+            handler<HeypixelSWKillEvent> { event ->
+            if (event.killer == player.name.string) {
+                sayL(event.victim)
+            }
+        }
+    }
+
+    val modes = choices(
+        "Mode",
+        HeypixelSW,
+        arrayOf(
+            Normal,
+            HeypixelSW
+        )
+    )
+
+    private object WordPatternCustom : Choice("Custom") {
+        override val parent: ChoiceConfigurable<*>
+            get() = wordPattern
+
+        val customMessages by textList("CustomMessages", mutableListOf("关注B站ShootForever"))
+    }
+
+    private object WordPatternPoem : Choice("Poem") {
+        override val parent: ChoiceConfigurable<*>
+            get() = wordPattern
+    }
+
+    private val wordPattern = choices(
+        "WordPattern",
+        WordPatternCustom,
+        arrayOf(
+            WordPatternCustom,
+            WordPatternPoem
+        )
+    )
+
     private val nameInFront by boolean("NameInFront", true)
     private val advertisementInEnd by boolean("AdvertisementInEnd", true)
-
-    private val enemies = mutableListOf<Entity>()
-
-    @Suppress("unused")
-    private val worldChangeEventHandler = handler<WorldChangeEvent> {
-        enemies.clear()
-    }
-
-    @Suppress("unused")
-    private val attackEventHandler = handler<AttackEntityEvent> { event ->
-        if (event.entity.isPlayer && !enemies.contains(event.entity)) {
-            enemies.add(event.entity)
-        }
-    }
-
-    @Suppress("unused")
-    private val tickHandler = tickHandler {
-        enemies.filter { !it.isAlive }.forEach {
-            sayL(it)
-            enemies.remove(it)
-        }
-    }
 
     private val poems = listOf(
         "海内存知己，天涯若比邻",
@@ -95,22 +143,19 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
         "愿得此身长报国，何须生入玉门关"
     )
 
-    private fun sayL(entity: Entity) {
-        var message = when (wordPattern) {
-            WordPatternChoices.POEM -> poems.random()
-            WordPatternChoices.CUSTOM -> customMessages.random()
+    private fun sayL(name: String) {
+        var message = when (wordPattern.activeChoice) {
+            is WordPatternCustom -> (wordPattern.activeChoice as WordPatternCustom).customMessages.random()
+            is WordPatternPoem -> poems.random()
+            else -> ""
         }
         if (nameInFront) {
-            message = "${entity.name.literalString!!} $message"
+            message = "$name $message"
         }
         if (advertisementInEnd) {
             message += " --BMWClient 1053719666"
         }
         network.sendChatMessage(message)
-    }
-
-    override fun enable() {
-        enemies.clear()
     }
 
 }

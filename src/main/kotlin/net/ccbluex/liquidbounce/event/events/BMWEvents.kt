@@ -1,7 +1,7 @@
 /*
  * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
  *
- * Copyright (c) 2015 - 2023 CCBlueX
+ * Copyright (c) 2015 - 2025 CCBlueX
  *
  * LiquidBounce is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +17,13 @@
  * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pluginManagement {
-    repositories {
-        maven {
-            name = "Fabric"
-            url = uri("https://maven.fabricmc.net/")
-        }
-        gradlePluginPortal()
-        mavenCentral()
-    }
+package net.ccbluex.liquidbounce.event.events
 
-    plugins {
-        val loom_version: String by settings
-        val kotlin_version: String by settings
-        id("fabric-loom") version loom_version
-        kotlin("jvm") version kotlin_version
-    }
-}
+import net.ccbluex.liquidbounce.event.Event
+import net.ccbluex.liquidbounce.utils.client.Nameable
 
-rootProject.name = "BMWClient"
+@Nameable("heypixelSWKill")
+class HeypixelSWKillEvent(
+    val victim: String,
+    val killer: String
+) : Event()
