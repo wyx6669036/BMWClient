@@ -1,15 +1,15 @@
 package net.ccbluex.liquidbounce.features.module.modules.bmw.grimvelocity.modes
 
 import net.ccbluex.liquidbounce.bmw.notifyAsMessage
-import net.ccbluex.liquidbounce.config.types.nesting.Choice
-import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
 import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.events.MovementInputEvent
 import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
+import net.ccbluex.liquidbounce.features.module.modules.bmw.grimvelocity.GrimVelocityMode
 import net.ccbluex.liquidbounce.features.module.modules.bmw.grimvelocity.ModuleGrimVelocity
 import net.ccbluex.liquidbounce.features.module.modules.combat.killaura.ModuleKillAura
+import net.ccbluex.liquidbounce.features.module.modules.player.nofall.modes.NoFallGrim
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.utils.raytraceEntity
 import net.ccbluex.liquidbounce.utils.combat.CombatManager
@@ -25,18 +25,14 @@ import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket
 import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket
 import net.minecraft.util.Hand
 
-object GrimVelocityNoXZ : Choice("NoXZ") {
-
-    override val parent: ChoiceConfigurable<*>
-        get() = ModuleGrimVelocity.modes
+object GrimVelocityNoXZ : GrimVelocityMode("NoXZ") {
 
     private val attackCount by int("AttackCount", 6, 0..20)
     private val jumpReset by boolean("JumpReset", true)
-    private val chance by int("Chance", 100, 0..100, "%")
     private val debug by boolean("Debug", false)
 
-    private object Cooldown : ToggleableConfigurable(this, "Cooldown", true) {
-        val maxAttackCount by int("MaxAttackCount", 20, 0..100)
+    private object Cooldown : ToggleableConfigurable(this, "Cooldown", false) {
+        val maxAttackCount by int("MaxAttackCount", 30, 0..100)
         val cooldownTicks by int("CooldownTicks", 10, 0..100, "ticks")
         val byHighCPSWarning by boolean("ByHighCPSWarning", true)
     }
@@ -50,10 +46,15 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
     private var totalAttackCount = 0
     private var cooldownTicks = 0
     private var jump = false
+    private var active = false
+
+    override val shouldStopBacktrack: Boolean
+        get() = active
 
     private fun reset() {
         canReduce = false
         target = null
+        active = false
     }
 
     private fun findTarget(): Entity? {
@@ -92,9 +93,6 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
                 && player.isAlive
                 && !player.isSpectator
                 && !player.abilities.flying
-                && !player.isInFluid
-                && !player.isClimbing
-                && !player.isOnFire
                 && !player.usingItem
             ) {
                 player.setVelocity(
@@ -111,13 +109,15 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
     private val packetEventHandler = handler<PacketEvent> { event ->
         val packet = event.packet
 
-        if (event.packet is EntityVelocityUpdateS2CPacket
-            && packet.entityId == player.id
-            && (1..100).random() <= chance
-        ) {
+        if (event.packet is EntityVelocityUpdateS2CPacket && packet.entityId == player.id) {
+            if (InventoryManager.isInventoryOpen || mc.currentScreen is GenericContainerScreen) return@handler
             target = findTarget() ?: return@handler
 
+            if (jumpReset) jump = true
+
             if (cooldownTicks == 0) {
+                active = true
+
                 val sprinting = player.isSprinting
 
                 if (!sprinting) {
@@ -138,6 +138,7 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
 
                         if (entityHitResult == null) {
                             attacked = false
+                            reset()
                             if (debug) notifyAsMessage(ModuleGrimVelocity, "Fail to attack the target")
                             break
                         }
@@ -147,15 +148,13 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
                         totalAttackCount++
                     }
 
-                    this.canReduce = attacked
+                    canReduce = attacked
                 }
 
                 if (!sprinting) {
                     network.sendPacket(ClientCommandC2SPacket(player, ClientCommandC2SPacket.Mode.STOP_SPRINTING))
                 }
             }
-
-            if (jumpReset) jump = true
         }
 
         if (packet is GameMessageS2CPacket
@@ -170,7 +169,11 @@ object GrimVelocityNoXZ : Choice("NoXZ") {
     @Suppress("unused")
     private val movementInputEventHandler = handler<MovementInputEvent> { event ->
         if (jumpReset && jump) {
-            if (!InventoryManager.isInventoryOpen && mc.currentScreen !is GenericContainerScreen) {
+            if (!InventoryManager.isInventoryOpen
+                && mc.currentScreen !is GenericContainerScreen
+                && player.isOnGround
+                && !(NoFallGrim.running && NoFallGrim.jumping)
+            ) {
                 event.jump = true
             }
             jump = false

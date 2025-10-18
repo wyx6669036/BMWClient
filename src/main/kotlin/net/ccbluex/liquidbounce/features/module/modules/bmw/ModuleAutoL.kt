@@ -2,6 +2,7 @@ package net.ccbluex.liquidbounce.features.module.modules.bmw
 
 import net.ccbluex.liquidbounce.config.types.nesting.Choice
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
+import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
 import net.ccbluex.liquidbounce.event.events.HeypixelSWKillEvent
@@ -15,7 +16,7 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
 
     private object Normal : Choice("Normal") {
         override val parent: ChoiceConfigurable<*>
-            get() = modes
+            get() = mode
 
         private val enemies = mutableListOf<Entity>()
 
@@ -46,7 +47,7 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
 
     private object HeypixelSW : Choice("HeypixelSW") {
         override val parent: ChoiceConfigurable<*>
-            get() = modes
+            get() = mode
 
         @Suppress("unused")
         private val heypixelSWKillEventHandler =
@@ -57,7 +58,7 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
         }
     }
 
-    val modes = choices(
+    private val mode = choices(
         "Mode",
         HeypixelSW,
         arrayOf(
@@ -88,8 +89,16 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
     )
 
     private val nameInFront by boolean("NameInFront", true)
-    private val advertisementInEnd by boolean("AdvertisementInEnd", true)
+    private val advertisement by boolean("Advertisement", true)
+    private object RandomTextInEnd : ToggleableConfigurable(this, "RandomTextInEnd", true) {
+        val length by intRange("Length", 5..10, 0..50)
+    }
 
+    init {
+        tree(RandomTextInEnd)
+    }
+
+    private const val CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     private val poems = listOf(
         "海内存知己，天涯若比邻",
         "莫愁前路无知己，天下谁人不识君",
@@ -152,8 +161,13 @@ object ModuleAutoL : ClientModule("AutoL", Category.BMW) {
         if (nameInFront) {
             message = "$name $message"
         }
-        if (advertisementInEnd) {
-            message += " --BMWClient 1053719666"
+        if (advertisement) {
+            message += " --BMWClient"
+        }
+        if (RandomTextInEnd.enabled) {
+            message += " <" + (1..RandomTextInEnd.length.random())
+                .map {  CHARSET.random() }
+                .joinToString("") + ">"
         }
         network.sendChatMessage(message)
     }

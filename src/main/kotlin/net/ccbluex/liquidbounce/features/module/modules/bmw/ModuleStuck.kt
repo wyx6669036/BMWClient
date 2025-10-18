@@ -1,36 +1,28 @@
 package net.ccbluex.liquidbounce.features.module.modules.bmw
 
 import net.ccbluex.liquidbounce.bmw.notifyAsMessage
-import net.ccbluex.liquidbounce.config.types.nesting.ToggleableConfigurable
+import net.ccbluex.liquidbounce.bmw.sendPacketNoEvent
 import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.events.MovementInputEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
-import net.ccbluex.liquidbounce.utils.client.sendPacketSilently
+import net.ccbluex.liquidbounce.utils.movement.DirectionalInput
+import net.minecraft.network.packet.c2s.play.PlayerInteractBlockC2SPacket
+import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket
 
-object ModuleStuck : ClientModule("Stuck", Category.BMW) {
+object ModuleStuck : ClientModule("Stuck", Category.BMW, disableOnQuit = true) {
 
     private val autoDisable by boolean("AutoDisable", true)
 
-    private object AutoReset : ToggleableConfigurable(this, "AutoReset", false) {
-        val resetTicks by int("ResetTicks", 20, 1..200, "ticks")
-    }
-
-    private val cancelC03Packet by boolean("CancelC03Packet", true)
-
-    init {
-        tree(AutoReset)
-    }
-
-    private var stucking = false
-
     @Suppress("unused")
-    private val movementInputEventHandler = handler<MovementInputEvent> {
+    private val movementInputEventHandler = handler<MovementInputEvent> { event ->
+        event.directionalInput = DirectionalInput.NONE
+        event.jump = false
         player.movement.x = 0.0
         player.movement.y = 0.0
         player.movement.z = 0.0
@@ -38,51 +30,62 @@ object ModuleStuck : ClientModule("Stuck", Category.BMW) {
 
     @Suppress("unused")
     private val packetEventHandler = handler<PacketEvent> { event ->
-        if (!player.isOnGround) {
-            stucking = true
+        val packet = event.packet
 
-            if (event.packet is PlayerPositionLookS2CPacket && autoDisable) {
-                notifyAsMessage(ModuleStuck, "Auto disable for S08 packet")
-                enabled = false
-            }
-
-            if (cancelC03Packet && event.packet is PlayerMoveC2SPacket) {
-                event.cancelEvent()
-            }
-
-            if (event.packet is PlayerInteractItemC2SPacket) {
-                event.cancelEvent()
-                sendPacketSilently(
-                    PlayerMoveC2SPacket.LookAndOnGround(
-                        player.yaw, player.pitch, player.isOnGround, player.horizontalCollision
-                    )
-                )
-                sendPacketSilently(
-                    PlayerInteractItemC2SPacket(
-                        event.packet.hand, event.packet.sequence, player.yaw, player.pitch
-                    )
-                )
-            }
-        } else if (stucking && autoDisable) {
-            notifyAsMessage(ModuleStuck, "Auto disable for being on ground")
+        if (packet is PlayerPositionLookS2CPacket && autoDisable) {
+            notifyAsMessage(ModuleStuck, "Auto disable for flag")
             enabled = false
+        }
+
+        if (packet is PlayerMoveC2SPacket) {
+            event.cancelEvent()
+        }
+
+        if (packet is PlayerInteractItemC2SPacket) {
+            event.cancelEvent()
+            sendPacketNoEvent(
+                ModuleStuck,
+                PlayerMoveC2SPacket.LookAndOnGround(
+                    player.yaw, player.pitch, player.isOnGround, player.horizontalCollision
+                )
+            )
+            sendPacketNoEvent(
+                ModuleStuck,
+                PlayerInteractItemC2SPacket(
+                    packet.hand, packet.sequence, player.yaw, player.pitch
+                )
+            )
+        }
+
+        if (packet is PlayerInteractEntityC2SPacket) {
+            event.cancelEvent()
+            sendPacketNoEvent(
+                ModuleStuck,
+                PlayerMoveC2SPacket.LookAndOnGround(
+                    player.yaw, player.pitch, player.isOnGround, player.horizontalCollision
+                )
+            )
+            sendPacketNoEvent(ModuleStuck, packet)
+        }
+
+        if (packet is PlayerInteractBlockC2SPacket) {
+            event.cancelEvent()
+            sendPacketNoEvent(
+                ModuleStuck,
+                PlayerMoveC2SPacket.LookAndOnGround(
+                    player.yaw, player.pitch, player.isOnGround, player.horizontalCollision
+                )
+            )
+            sendPacketNoEvent(ModuleStuck, packet)
         }
     }
 
     @Suppress("unused")
     private val tickHandler = tickHandler {
-        if (!AutoReset.enabled) {
-            return@tickHandler
+        if (autoDisable && player.isOnGround) {
+            notifyAsMessage(ModuleStuck, "Auto disable for being on ground")
+            enabled = false
         }
-
-        waitTicks(AutoReset.resetTicks)
-        notifyAsMessage(ModuleStuck, "Auto reset")
-        enabled = false
-        enabled = true
-    }
-
-    override fun enable() {
-        stucking = false
     }
 
 }
