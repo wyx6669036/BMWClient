@@ -18,8 +18,10 @@
  */
 package net.ccbluex.liquidbounce.features.module.modules.world
 
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet
 import net.ccbluex.liquidbounce.bmw.HEYPIXEL_SW_END_MESSAGE
 import net.ccbluex.liquidbounce.config.types.NamedChoice
+import net.ccbluex.liquidbounce.config.types.ValueType
 import net.ccbluex.liquidbounce.event.events.ChatReceiveEvent
 import net.ccbluex.liquidbounce.event.events.ClientShutdownEvent
 import net.ccbluex.liquidbounce.event.events.DeathEvent
@@ -29,6 +31,7 @@ import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.events.WorldChangeEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
+import net.ccbluex.liquidbounce.event.tickUntil
 import net.ccbluex.liquidbounce.features.command.commands.module.CommandAutoDisable
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
@@ -53,19 +56,10 @@ import java.util.EnumSet
  * Command: [CommandAutoDisable]
  */
 object ModuleAutoDisable : ClientModule("AutoDisable", Category.WORLD) {
+    val modules: Set<ClientModule>
+        field: MutableSet<ClientModule> = ReferenceOpenHashSet()
 
-    val listOfModules = arrayListOf(
-        ModuleFly,
-        ModuleSpeed,
-        ModuleNoClip,
-        ModuleKillAura,
-        ModuleScaffold,
-        ModuleDelayBlink,
-        ModuleBlink,
-        ModuleStuck,
-        ModuleFireballFly
-    )
-
+    private val moduleNames by registryList("Modules", hashSetOf<String>(), ValueType.CLIENT_MODULE)
     private val disableOn by multiEnumChoice<DisableOn>(
         "On",
         EnumSet.of(
@@ -76,8 +70,43 @@ object ModuleAutoDisable : ClientModule("AutoDisable", Category.WORLD) {
         )
     )
 
+    fun clear() {
+        modules.clear()
+        moduleNames.clear()
+    }
+
+    fun add(module: ClientModule): Boolean {
+        return if (modules.add(module)) {
+            moduleNames.add(module.name)
+            true
+        } else {
+            false
+        }
+    }
+
+    fun remove(module: ClientModule): Boolean {
+        return if (modules.remove(module)) {
+            moduleNames.remove(module.name)
+            true
+        } else {
+            false
+        }
+    }
+
+    init {
+        add(ModuleFly)
+        add(ModuleSpeed)
+        add(ModuleNoClip)
+        add(ModuleKillAura)
+        add(ModuleScaffold)
+        add(ModuleDelayBlink)
+        add(ModuleBlink)
+        add(ModuleStuck)
+        add(ModuleFireballFly)
+    }
+
     @Suppress("unused")
-    val flagHandler = handler<PacketEvent> {
+    val worldChangesHandler = handler<PacketEvent> {
         if (it.packet is PlayerPositionLookS2CPacket && DisableOn.FLAG in disableOn) {
             disableAndNotify("flag")
         }
@@ -111,9 +140,9 @@ object ModuleAutoDisable : ClientModule("AutoDisable", Category.WORLD) {
     @Suppress("unused")
     private val tickHandler = tickHandler {
         if (DisableOn.SPECTATOR in disableOn) {
-            waitUntil { player.isSpectator || player.abilities.flying }
+            tickUntil { player.isSpectator || player.abilities.flying }
             disableAndNotify("spectator")
-            waitUntil { !player.isSpectator && !player.abilities.flying }
+            tickUntil { !player.isSpectator && !player.abilities.flying }
         }
     }
 
@@ -132,10 +161,18 @@ object ModuleAutoDisable : ClientModule("AutoDisable", Category.WORLD) {
     }
 
     private fun disableAndNotify(reason: String) {
-        for (module in listOfModules) {
-            module.enabled = false
+        val anyDisabled = modules.any { module ->
+            if (module.enabled) {
+                module.enabled = false
+                true
+            } else {
+                false
+            }
         }
-        notification("Notifier", "Disabled modules due to $reason", NotificationEvent.Severity.INFO)
+
+        if (anyDisabled) {
+            notification("Notifier", "Disabled modules due to $reason", NotificationEvent.Severity.INFO)
+        }
     }
 
     private enum class DisableOn(override val choiceName: String) : NamedChoice {

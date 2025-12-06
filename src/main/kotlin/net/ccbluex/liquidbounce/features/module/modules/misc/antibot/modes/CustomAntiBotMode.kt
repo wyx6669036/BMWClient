@@ -20,6 +20,7 @@ package net.ccbluex.liquidbounce.features.module.modules.misc.antibot.modes
 
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet
+import net.ccbluex.fastutil.forEachInt
 import net.ccbluex.liquidbounce.config.types.nesting.Choice
 import net.ccbluex.liquidbounce.config.types.nesting.ChoiceConfigurable
 import net.ccbluex.liquidbounce.config.types.NamedChoice
@@ -30,18 +31,17 @@ import net.ccbluex.liquidbounce.event.events.PacketEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.module.modules.misc.antibot.ModuleAntiBot
 import net.ccbluex.liquidbounce.features.module.modules.misc.antibot.ModuleAntiBot.isADuplicate
-import net.ccbluex.liquidbounce.utils.item.material
 import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.CRITICAL_MODIFICATION
 import net.ccbluex.liquidbounce.utils.math.sq
-import net.minecraft.block.AbstractSkullBlock
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.item.*
-import net.minecraft.item.equipment.ArmorMaterial
 import net.minecraft.item.equipment.ArmorMaterials
 import net.minecraft.network.packet.s2c.play.EntitiesDestroyS2CPacket
 import net.minecraft.network.packet.s2c.play.EntityAnimationS2CPacket
 import net.minecraft.network.packet.s2c.play.EntityAttributesS2CPacket
 import net.minecraft.network.packet.s2c.play.EntityS2CPacket
+import net.minecraft.registry.tag.ItemTags
+import net.minecraft.registry.tag.TagKey
 import java.util.*
 import java.util.function.Predicate
 import kotlin.math.abs
@@ -73,34 +73,64 @@ object CustomAntiBotMode : Choice("Custom"), ModuleAntiBot.IAntiBotMode {
     }
 
     private object Armor : ToggleableConfigurable(ModuleAntiBot, "Armor", false) {
+
+        /**
+         * @see ArmorMaterials
+         */
         @Suppress("UNUSED")
         private enum class ArmorPredicate(
             override val choiceName: String,
             val predicate: Predicate<ItemStack>,
         ) : NamedChoice {
             // General
-            NOTHING("Nothing", ItemStack::isEmpty),
-            LEATHER("Leather", ArmorMaterials.LEATHER),
-            CHAIN("Chain", ArmorMaterials.CHAIN),
-            IRON("Iron", ArmorMaterials.IRON),
-            GOLD("Gold", ArmorMaterials.GOLD),
-            DIAMOND("Diamond", ArmorMaterials.DIAMOND),
-            NETHERITE("Netherite", ArmorMaterials.NETHERITE),
+            NOTHING("Nothing", Predicate(ItemStack::isEmpty)),
+            LEATHER(
+                "Leather",
+                Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
+            ),
+            CHAIN(
+                "Chain",
+                Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS
+            ),
+            IRON(
+                "Iron",
+                Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS
+            ),
+            GOLD(
+                "Gold",
+                Items.GOLDEN_HELMET, Items.GOLDEN_CHESTPLATE, Items.GOLDEN_LEGGINGS, Items.GOLDEN_BOOTS
+            ),
+            DIAMOND(
+                "Diamond",
+                Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS
+            ),
+            NETHERITE(
+                "Netherite",
+                Items.NETHERITE_HELMET, Items.NETHERITE_CHESTPLATE, Items.NETHERITE_LEGGINGS, Items.NETHERITE_BOOTS
+            ),
 
             // Chestplate only
             ELYTRA("Elytra", Items.ELYTRA),
 
             // Helmet only
-            TURTLE_SCUTE("TurtleScute", ArmorMaterials.TURTLE_SCUTE),
+            TURTLE_SCUTE("TurtleScute", Items.TURTLE_HELMET),
             PUMPKIN("Pumpkin", Items.CARVED_PUMPKIN),
-            SKULL("Skull", { (it.item as? BlockItem)?.block is AbstractSkullBlock });
+            SKULL("Skull", ItemTags.SKULLS);
 
-            constructor(choiceName: String, material: ArmorMaterial) : this(
+            constructor(choiceName: String, tag: TagKey<Item>) : this(
                 choiceName,
-                { (it.item as? ArmorItem)?.material() == material }
+                Predicate { it.isIn(tag) }
             )
 
-            constructor(choiceName: String, item: Item) : this(choiceName, { it.item === item })
+            constructor(choiceName: String, item: Item) : this(
+                choiceName,
+                Predicate { it.isOf(item) }
+            )
+
+            constructor(choiceName: String, vararg items: Item) : this(
+                choiceName,
+                Predicate { items.contains(it.item) }
+            )
         }
 
         private val BASE = EnumSet.of(
@@ -136,7 +166,7 @@ object CustomAntiBotMode : Choice("Custom"), ModuleAntiBot.IAntiBotMode {
             return entity.armorItems.withIndex().all { (index, armor) ->
                 val predicates = values[values.lastIndex - index].get()
                 // Nothing selected = skip this part
-                return predicates.isEmpty() || predicates.any {
+                predicates.isEmpty() || predicates.any {
                     it.predicate.test(armor)
                 }
             }
@@ -160,15 +190,6 @@ object CustomAntiBotMode : Choice("Custom"), ModuleAntiBot.IAntiBotMode {
 
     private val armorSet = IntOpenHashSet()
 
-    private inline fun IntOpenHashSet.filterInPlace(predicate: (Int) -> Boolean) {
-        val iter = this.intIterator()
-        while (iter.hasNext()) {
-            if (predicate(iter.nextInt())) {
-                iter.remove()
-            }
-        }
-    }
-
     @Suppress("unused")
     private val tickHandler = handler<GameTickEvent>(priority = CRITICAL_MODIFICATION) {
         val rangeSquared = AlwaysInRadius.alwaysInRadiusRange.sq()
@@ -186,7 +207,7 @@ object CustomAntiBotMode : Choice("Custom"), ModuleAntiBot.IAntiBotMode {
             }
         }
 
-        armorSet.filterInPlace {
+        armorSet.removeIf {
             val entity = world.getEntityById(it) as? PlayerEntity
             entity == null || Armor.isValid(entity)
         }
@@ -237,15 +258,12 @@ object CustomAntiBotMode : Choice("Custom"), ModuleAntiBot.IAntiBotMode {
             }
 
             is EntitiesDestroyS2CPacket -> {
-                with(packet.entityIds.intIterator()) {
-                    while (hasNext()) {
-                        val entityId = nextInt()
-                        attributesSet.remove(entityId)
-                        flyingSet.remove(entityId)
-                        hitSet.remove(entityId)
-                        notAlwaysInRadiusSet.remove(entityId)
-                        armorSet.remove(entityId)
-                    }
+                packet.entityIds.forEachInt { entityId ->
+                    attributesSet.remove(entityId)
+                    flyingSet.remove(entityId)
+                    hitSet.remove(entityId)
+                    notAlwaysInRadiusSet.remove(entityId)
+                    armorSet.remove(entityId)
                 }
             }
         }

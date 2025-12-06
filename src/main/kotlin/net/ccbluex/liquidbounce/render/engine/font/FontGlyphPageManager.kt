@@ -1,3 +1,23 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package net.ccbluex.liquidbounce.render.engine.font
 
 import it.unimi.dsi.fastutil.chars.Char2ObjectOpenHashMap
@@ -14,8 +34,8 @@ import kotlin.math.ceil
 private val BASIC_CHARS = '\u0000'..'\u0200'
 
 class FontGlyphPageManager(
-    baseFonts: Set<FontManager.FontFace>,
-    additionalFonts: Set<FontManager.FontFace> = emptySet()
+    baseFonts: Collection<FontManager.FontFace>,
+    additionalFonts: Collection<FontManager.FontFace> = emptySet()
 ): EventListener {
 
     private val staticPage: List<StaticGlyphPage> = StaticGlyphPage.createGlyphPages(baseFonts.flatMap { loadedFont ->
@@ -23,11 +43,14 @@ class FontGlyphPageManager(
     })
     private val dynamicPage: DynamicGlyphPage = DynamicGlyphPage(
         Dimension(1024, 1024),
-        ceil(baseFonts.elementAt(0).styles[0]!!.height * 2.0F).toInt()
+        ceil(baseFonts.first().styles[0]!!.height * 2.0F).toInt()
     )
     private val dynamicFontManager: DynamicFontCacheManager = DynamicFontCacheManager(
         this.dynamicPage,
-        baseFonts + additionalFonts
+        HashSet<FontManager.FontFace>(baseFonts.size + staticPage.size).apply {
+            addAll(baseFonts)
+            addAll(additionalFonts)
+        }
     )
 
     private val availableFonts: Map<FontManager.FontFace, FontGlyphRegistry>
@@ -57,7 +80,7 @@ class FontGlyphPageManager(
     }
 
     private fun createGlyphRegistries(
-        baseFonts: Set<FontManager.FontFace>,
+        baseFonts: Collection<FontManager.FontFace>,
         glyphPages: List<StaticGlyphPage>
     ): Map<FontManager.FontFace, FontGlyphRegistry> = baseFonts.associateWith { loadedFont ->
         val array = Array(4) { Char2ObjectOpenHashMap<GlyphDescriptor>(512) }

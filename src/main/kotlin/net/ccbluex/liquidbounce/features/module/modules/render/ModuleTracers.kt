@@ -62,11 +62,11 @@ object ModuleTracers : ClientModule("Tracers", Category.RENDER) {
         override fun getColor(param: LivingEntity): Color4b = throw NotImplementedError()
     }
 
-    override fun enable() {
+    override fun onEnabled() {
         RenderedEntities.subscribe(this)
     }
 
-    override fun disable() {
+    override fun onDisabled() {
         RenderedEntities.unsubscribe(this)
     }
 
@@ -111,9 +111,10 @@ object ModuleTracers : ClientModule("Tracers", Category.RENDER) {
 
                     val pos = relativeToCamera(entity.interpolateCurrentPosition(event.partialTicks)).toVec3()
 
-                    withColor(color) {
-                        drawLines(eyeVector, pos, pos, pos + Vec3(0f, entity.height, 0f))
-                    }
+                    drawLines(
+                        argb = color.toARGB(),
+                        eyeVector, pos, pos, pos + Vec3(0f, entity.height, 0f)
+                    )
                 }
             }
         }

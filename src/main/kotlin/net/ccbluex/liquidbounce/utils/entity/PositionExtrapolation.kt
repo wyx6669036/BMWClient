@@ -1,12 +1,32 @@
+/*
+ * This file is part of LiquidBounce (https://github.com/CCBlueX/LiquidBounce)
+ *
+ * Copyright (c) 2015 - 2025 CCBlueX
+ *
+ * LiquidBounce is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * LiquidBounce is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with LiquidBounce. If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package net.ccbluex.liquidbounce.utils.entity
 
 import net.ccbluex.liquidbounce.utils.math.minus
 import net.ccbluex.liquidbounce.utils.math.plus
 import net.ccbluex.liquidbounce.utils.math.times
-import net.fabricmc.fabric.impl.`object`.builder.FabricEntityTypeImpl.Builder.Living
 import net.minecraft.entity.LivingEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.util.math.Vec3d
+import kotlin.math.max
 import kotlin.math.round
 
 /**
@@ -51,6 +71,7 @@ class PlayerSimulationExtrapolation(private val simulation: SimulatedPlayerCache
     constructor(player: PlayerEntity) : this(PlayerSimulationCache.getSimulationForOtherPlayers(player))
 
     override fun getPositionInTicks(ticks: Double): Vec3d {
-        return this.simulation.getSnapshotAt(round(ticks.coerceAtMost(30.0)).toInt()).pos
+        val ticks = max(0, round(ticks.coerceAtMost(30.0)).toInt())
+        return this.simulation.getSnapshotAt(ticks).pos
     }
 }

@@ -8,6 +8,7 @@ import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.TransferOrigin
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
+import net.ccbluex.liquidbounce.event.waitTicks
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
@@ -21,8 +22,6 @@ import net.ccbluex.liquidbounce.utils.inventory.interactItem
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 import net.minecraft.item.Items
 import net.minecraft.network.packet.Packet
-import net.minecraft.network.packet.c2s.play.ChatMessageC2SPacket
-import net.minecraft.network.packet.c2s.play.CommandExecutionC2SPacket
 import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket
 import net.minecraft.network.packet.s2c.common.KeepAliveS2CPacket
 import net.minecraft.network.packet.s2c.play.ChatMessageS2CPacket
@@ -171,7 +170,7 @@ object ModuleFireballFly : ClientModule("FireballFly", Category.BMW, disableOnQu
         return MathHelper.wrapDegrees(yaw + 180)
     }
 
-    override fun enable() {
+    override fun onEnabled() {
         val fireballItem = Slots.OffhandWithHotbar.findClosestSlot(Items.FIRE_CHARGE)
         if (fireballItem != null) {
             val count = fireballItem.itemStack.count
@@ -185,7 +184,7 @@ object ModuleFireballFly : ClientModule("FireballFly", Category.BMW, disableOnQu
         }
     }
 
-    override fun disable() {
+    override fun onDisabled() {
         processPackets()
         canThrow = false
         canRotate = false

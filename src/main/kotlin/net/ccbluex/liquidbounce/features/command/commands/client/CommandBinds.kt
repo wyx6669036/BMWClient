@@ -20,17 +20,19 @@ package net.ccbluex.liquidbounce.features.command.commands.client
 
 import net.ccbluex.liquidbounce.features.command.Command
 import net.ccbluex.liquidbounce.features.command.CommandException
-import net.ccbluex.liquidbounce.features.command.CommandFactory
 import net.ccbluex.liquidbounce.features.command.builder.CommandBuilder
 import net.ccbluex.liquidbounce.features.command.builder.ParameterBuilder
-import net.ccbluex.liquidbounce.features.command.builder.Parameters
+import net.ccbluex.liquidbounce.features.command.builder.module
+import net.ccbluex.liquidbounce.features.command.builder.modules
 import net.ccbluex.liquidbounce.features.command.preset.pagedQuery
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleManager
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleClickGui
 import net.ccbluex.liquidbounce.utils.client.*
 import net.ccbluex.liquidbounce.utils.input.availableInputKeys
+import net.ccbluex.liquidbounce.utils.input.bind
 import net.ccbluex.liquidbounce.utils.input.inputByName
+import net.ccbluex.liquidbounce.utils.input.unbind
 import net.minecraft.client.util.InputUtil
 import net.minecraft.util.Formatting
 
@@ -40,7 +42,7 @@ import net.minecraft.util.Formatting
  * Allows you to manage the bindings of modules to keys.
  * It provides subcommands to add, remove, list and clear bindings.
  */
-object CommandBinds : CommandFactory {
+object CommandBinds : Command.Factory {
 
     override fun createCommand(): Command {
         return CommandBuilder
@@ -55,8 +57,8 @@ object CommandBinds : CommandFactory {
 
     private fun clearSubcommand() = CommandBuilder
         .begin("clear")
-        .handler { command, _ ->
-            ModuleManager.forEach { it.bind.unbind() }
+        .handler {
+            ModuleManager.forEach { it.bindValue.unbind() }
             chat(command.result("bindsCleared"), metadata = MessageMetadata(id = "Binds#global"))
         }
         .build()
@@ -87,11 +89,11 @@ object CommandBinds : CommandFactory {
     private fun removeSubcommand() = CommandBuilder
         .begin("remove")
         .parameter(
-            Parameters.modules { mod -> !mod.bind.isUnbound }
+            ParameterBuilder.modules { mod -> !mod.bind.isUnbound }
                 .required()
                 .build()
         )
-        .handler { command, args ->
+        .handler {
             val modules = args[0] as Set<ClientModule>
 
             modules.forEach { module ->
@@ -99,7 +101,7 @@ object CommandBinds : CommandFactory {
                     throw CommandException(command.result("moduleNotBound"))
                 }
 
-                module.bind.unbind()
+                module.bindValue.unbind()
 
                 chat(
                     regular(command.result("bindRemoved", variable(module.name))),
@@ -114,18 +116,18 @@ object CommandBinds : CommandFactory {
     private fun addSubcommand() = CommandBuilder
         .begin("add")
         .parameter(
-            Parameters.module()
+            ParameterBuilder.module()
                 .required()
                 .build()
         ).parameter(
             ParameterBuilder
                 .begin<String>("key")
                 .verifiedBy(ParameterBuilder.STRING_VALIDATOR)
-                .autocompletedWith { begin, _ -> availableInputKeys.filter { it.startsWith(begin) } }
+                .autocompletedFrom { availableInputKeys }
                 .required()
                 .build()
         )
-        .handler { command, args ->
+        .handler {
             val module = args[0] as ClientModule
             val keyName = args[1] as String
 
@@ -134,7 +136,7 @@ object CommandBinds : CommandFactory {
                 throw CommandException(command.result("unknownKey"))
             }
 
-            module.bind.bind(bindKey)
+            module.bindValue.bind(bindKey)
             ModuleClickGui.reload()
             chat(
                 regular(

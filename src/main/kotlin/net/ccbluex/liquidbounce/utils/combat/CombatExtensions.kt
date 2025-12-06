@@ -20,17 +20,20 @@
 package net.ccbluex.liquidbounce.utils.combat
 
 import it.unimi.dsi.fastutil.objects.ObjectDoublePair
+import net.ccbluex.fastutil.component1
+import net.ccbluex.fastutil.component2
 import net.ccbluex.liquidbounce.config.types.NamedChoice
 import net.ccbluex.liquidbounce.event.EventManager
 import net.ccbluex.liquidbounce.event.events.AttackEntityEvent
 import net.ccbluex.liquidbounce.features.module.modules.client.ModuleTargets
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.ModuleCriticals
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeCam
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleFreeLook
 import net.ccbluex.liquidbounce.utils.block.SwingMode
 import net.ccbluex.liquidbounce.utils.client.*
 import net.ccbluex.liquidbounce.utils.entity.squaredBoxedDistanceTo
-import net.ccbluex.liquidbounce.utils.kotlin.component1
-import net.ccbluex.liquidbounce.utils.kotlin.component2
 import net.ccbluex.liquidbounce.utils.kotlin.toDouble
+import net.minecraft.client.option.Perspective
 import net.minecraft.client.world.ClientWorld
 import net.minecraft.entity.Entity
 import net.minecraft.entity.LivingEntity
@@ -39,6 +42,8 @@ import net.minecraft.entity.mob.Angerable
 import net.minecraft.entity.mob.HostileEntity
 import net.minecraft.entity.mob.Monster
 import net.minecraft.entity.mob.WaterCreatureEntity
+import net.minecraft.entity.passive.AllayEntity
+import net.minecraft.entity.passive.BatEntity
 import net.minecraft.entity.passive.PassiveEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket
@@ -74,6 +79,7 @@ enum class EntityTargetClassification {
  * Configurable to configure which entities and their state (like being dead) should be considered as a target
  */
 enum class Targets(override val choiceName: String) : NamedChoice {
+    SELF("Self"),
     PLAYERS("Players"),
     HOSTILE("Hostile"),
     ANGERABLE("Angerable"),
@@ -96,6 +102,11 @@ fun EnumSet<Targets>.shouldAttack(entity: Entity): Boolean {
 }
 
 fun EnumSet<Targets>.shouldShow(entity: Entity): Boolean {
+    if (entity === player) {
+        return Targets.SELF in this &&
+            (mc.options.perspective !== Perspective.FIRST_PERSON || ModuleFreeCam.enabled || ModuleFreeLook.enabled)
+    }
+
     val info = EntityTaggingManager.getTag(entity).targetingInfo
 
     return when {
@@ -123,15 +134,16 @@ private fun EnumSet<Targets>.isInteresting(suspect: Entity): Boolean {
     // Check if enemy is a player and should be considered as a target
     return when (suspect) {
         is PlayerEntity -> when {
-            suspect == mc.player -> false
+            suspect === mc.player -> false
             // Check if enemy is sleeping (or ignore being sleeping)
             suspect.isSleeping && Targets.SLEEPING !in this -> false
             else -> Targets.PLAYERS in this
         }
         is WaterCreatureEntity -> Targets.WATER_CREATURE in this
-        is PassiveEntity -> Targets.PASSIVE in this
+        is PassiveEntity, is BatEntity, is AllayEntity -> Targets.PASSIVE in this
         is HostileEntity, is Monster -> Targets.HOSTILE in this
         is Angerable -> Targets.ANGERABLE in this
+
         else -> false
     }
 }
@@ -190,11 +202,7 @@ fun Entity.attack(swing: Boolean, keepSprint: Boolean = false) {
 
 @Suppress("CognitiveComplexMethod", "NestedBlockDepth", "MagicNumber")
 fun Entity.attack(swing: SwingMode, keepSprint: Boolean = false) {
-    if (EventManager.callEvent(AttackEntityEvent(this) {
-        attack(swing, keepSprint)
-    }).isCancelled) {
-        return
-    }
+    EventManager.callEvent(AttackEntityEvent(this))
 
     with(player) {
         // Swing before attacking (on 1.8)
@@ -202,6 +210,7 @@ fun Entity.attack(swing: SwingMode, keepSprint: Boolean = false) {
             swing.swing(Hand.MAIN_HAND)
         }
 
+        interaction.syncSelectedSlot()
         network.sendPacket(PlayerInteractEntityC2SPacket.attack(this@attack, isSneaking))
 
         if (keepSprint) {
